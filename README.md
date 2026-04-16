@@ -1,8 +1,12 @@
 # @rlsfyi/mcp
 
-MCP server for publishing releases to [rls.fyi](https://rls.fyi).
+MCP server for publishing releases to [rls.fyi](https://rls.fyi). Works with any MCP-capable host, including Claude Code, Claude Desktop, Cursor, Windsurf, and Zed.
+
+The server communicates over stdio using the standard Model Context Protocol, so any host that speaks MCP can use it.
 
 ## Installation
+
+No install step is required — the examples below use `npx` to fetch the latest version on demand. If you prefer a pinned global install:
 
 ```bash
 npm install -g @rlsfyi/mcp
@@ -10,27 +14,23 @@ npm install -g @rlsfyi/mcp
 
 ## Setup
 
-1. Get your API key from [rls.fyi/dashboard](https://rls.fyi/dashboard)
+1. Get your API key from [rls.fyi/dashboard](https://rls.fyi/dashboard).
+2. Add the server to your host's MCP configuration (see the table below).
+3. Restart the host.
 
-2. Add to your MCP configuration:
+### Host configuration
 
-**Claude Desktop** (`~/Library/Application Support/Claude/claude_desktop_config.json`):
+The JSON snippet is identical for Claude Code, Claude Desktop, Cursor, and Windsurf — only the destination file differs. Zed uses a slightly different shape (see below).
 
-```json
-{
-  "mcpServers": {
-    "rlsfyi": {
-      "command": "npx",
-      "args": ["-y", "@rlsfyi/mcp"],
-      "env": {
-        "RLSFYI_API_KEY": "rls_your_api_key_here"
-      }
-    }
-  }
-}
-```
+| Host           | Config file                                                                |
+| -------------- | -------------------------------------------------------------------------- |
+| Claude Code    | `.mcp.json` (project, team-shared) or `~/.claude.json` (user/local scope)  |
+| Claude Desktop | `~/Library/Application Support/Claude/claude_desktop_config.json` (macOS), `%APPDATA%\Claude\claude_desktop_config.json` (Windows) |
+| Cursor         | `.cursor/mcp.json` (project) or `~/.cursor/mcp.json` (global)              |
+| Windsurf       | `~/.codeium/windsurf/mcp_config.json`                                      |
+| Zed            | `.zed/settings.json` (project) or `~/.config/zed/settings.json` (user)     |
 
-**Claude Code** (`~/.claude/settings.json`):
+**Claude Code / Claude Desktop / Cursor / Windsurf:**
 
 ```json
 {
@@ -46,25 +46,57 @@ npm install -g @rlsfyi/mcp
 }
 ```
 
-## Usage
+**Zed** (uses `context_servers`, not `mcpServers`):
 
-Once configured, Claude can publish releases using the `publish_release` tool:
-
+```json
+{
+  "context_servers": {
+    "rlsfyi": {
+      "command": "npx",
+      "args": ["-y", "@rlsfyi/mcp"],
+      "env": {
+        "RLSFYI_API_KEY": "rls_your_api_key_here"
+      }
+    }
+  }
+}
 ```
-When you complete a feature or fix, publish a release with:
-- project: your-project-slug
-- version: semver (1.0.0), date (2025-04-16), or descriptive (beta-launch)
-- summary: one sentence describing what changes for the user
-- changes: array of { type, title, body? }
-```
 
-### Change Types
+Other MCP-capable hosts should accept one of these two shapes; consult the host's own MCP docs for the destination path.
 
-- `feature` — new functionality
-- `fix` — bug fix
-- `breaking` — breaking change
-- `improvement` — enhancement to existing feature
-- `internal` — refactoring, deps, etc.
+### Project rules
+
+To teach the agent when to call `publish_release`, add a short instruction snippet to your project's rules file. The [rls.fyi dashboard](https://rls.fyi/dashboard) generates the snippet for you.
+
+| Host                 | Rules file             |
+| -------------------- | ---------------------- |
+| Claude Code          | `CLAUDE.md`            |
+| Cursor               | `.cursor/rules/rls.mdc`|
+| Windsurf             | `.windsurf/rules/rls.md` |
+| Other / generic      | `AGENTS.md`            |
+
+## Tools
+
+### `publish_release`
+
+Publishes a release to rls.fyi.
+
+**Inputs:**
+- `project` (string, required) — slug, lowercase alphanumeric plus hyphens
+- `version` (string, required) — semver (`1.2.0`), date (`2025-04-16`), or descriptive (`beta-launch`)
+- `summary` (string, required) — one sentence describing what changes for the user
+- `changes` (array, required) — items of `{ type, title, body? }`
+- `metadata` (object, optional) — `{ repo?, commit? }`
+
+**Change types:** `feature`, `fix`, `breaking`, `improvement`, `internal`.
+
+### `delete_release`
+
+Removes a previously published release.
+
+**Inputs:**
+- `project` (string, required)
+- `version` (string, required)
 
 ## Example
 
@@ -82,6 +114,7 @@ publish_release({
 ```
 
 Returns:
+
 ```
 Release published successfully!
 

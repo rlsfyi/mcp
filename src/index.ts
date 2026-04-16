@@ -7,7 +7,8 @@ import {
   ListToolsRequestSchema,
 } from "@modelcontextprotocol/sdk/types.js";
 
-const API_URL = "https://rls.fyi/publish";
+const PUBLISH_URL = "https://rls.fyi/publish";
+const RELEASES_URL = "https://rls.fyi/releases";
 
 interface Change {
   type: string;
@@ -35,11 +36,20 @@ interface ErrorResponse {
   error: string;
 }
 
+interface DeleteRequest {
+  project: string;
+  version: string;
+}
+
+interface DeleteResponse {
+  deleted: boolean;
+}
+
 async function publishRelease(
   apiKey: string,
   request: PublishRequest
 ): Promise<PublishResponse> {
-  const response = await fetch(API_URL, {
+  const response = await fetch(PUBLISH_URL, {
     method: "POST",
     headers: {
       "Content-Type": "application/json",
@@ -56,6 +66,30 @@ async function publishRelease(
   }
 
   return data as PublishResponse;
+}
+
+async function deleteRelease(
+  apiKey: string,
+  request: DeleteRequest
+): Promise<DeleteResponse> {
+  const response = await fetch(
+    `${RELEASES_URL}/${request.project}/${request.version}`,
+    {
+      method: "DELETE",
+      headers: {
+        Authorization: `Bearer ${apiKey}`,
+      },
+    }
+  );
+
+  const data = await response.json();
+
+  if (!response.ok) {
+    const error = data as ErrorResponse;
+    throw new Error(error.error || `HTTP ${response.status}`);
+  }
+
+  return data as DeleteResponse;
 }
 
 const server = new Server(
@@ -137,13 +171,34 @@ server.setRequestHandler(ListToolsRequestSchema, async () => {
           required: ["project", "version", "summary", "changes"],
         },
       },
+      {
+        name: "delete_release",
+        description:
+          "Delete a release from rls.fyi. Use this to remove a release that was published by mistake or is no longer needed.",
+        inputSchema: {
+          type: "object" as const,
+          properties: {
+            project: {
+              type: "string",
+              description: "Project slug",
+            },
+            version: {
+              type: "string",
+              description: "Version to delete",
+            },
+          },
+          required: ["project", "version"],
+        },
+      },
     ],
   };
 });
 
 server.setRequestHandler(CallToolRequestSchema, async (request) => {
-  if (request.params.name !== "publish_release") {
-    throw new Error(`Unknown tool: ${request.params.name}`);
+  const toolName = request.params.name;
+
+  if (toolName !== "publish_release" && toolName !== "delete_release") {
+    throw new Error(`Unknown tool: ${toolName}`);
   }
 
   const apiKey = process.env.RLSFYI_API_KEY;
@@ -159,30 +214,61 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
     };
   }
 
-  const args = request.params.arguments as unknown as PublishRequest;
+  if (toolName === "publish_release") {
+    const args = request.params.arguments as unknown as PublishRequest;
 
-  try {
-    const result = await publishRelease(apiKey, args);
-    return {
-      content: [
-        {
-          type: "text" as const,
-          text: `Release published successfully!\n\nRelease URL: ${result.url}\nProject URL: ${result.project_url}`,
-        },
-      ],
-    };
-  } catch (error) {
-    const message = error instanceof Error ? error.message : String(error);
-    return {
-      content: [
-        {
-          type: "text" as const,
-          text: `Failed to publish release: ${message}`,
-        },
-      ],
-      isError: true,
-    };
+    try {
+      const result = await publishRelease(apiKey, args);
+      return {
+        content: [
+          {
+            type: "text" as const,
+            text: `Release published successfully!\n\nRelease URL: ${result.url}\nProject URL: ${result.project_url}`,
+          },
+        ],
+      };
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error);
+      return {
+        content: [
+          {
+            type: "text" as const,
+            text: `Failed to publish release: ${message}`,
+          },
+        ],
+        isError: true,
+      };
+    }
   }
+
+  if (toolName === "delete_release") {
+    const args = request.params.arguments as unknown as DeleteRequest;
+
+    try {
+      await deleteRelease(apiKey, args);
+      return {
+        content: [
+          {
+            type: "text" as const,
+            text: `Release ${args.project}/${args.version} deleted successfully.`,
+          },
+        ],
+      };
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error);
+      return {
+        content: [
+          {
+            type: "text" as const,
+            text: `Failed to delete release: ${message}`,
+          },
+        ],
+        isError: true,
+      };
+    }
+  }
+
+  throw new Error(`Unhandled tool: ${toolName}`);
 });
 
 async function main() {
