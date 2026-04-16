@@ -90,6 +90,18 @@ Publishes a release to rls.fyi.
 
 **Change types:** `feature`, `fix`, `breaking`, `improvement`, `internal`.
 
+### `patch_release`
+
+Updates an already-published release on rls.fyi. At least one of `summary` or `changes` must be provided.
+
+**Inputs:**
+- `project` (string, required) — slug
+- `version` (string, required) — version of the release to update
+- `summary` (string, optional) — replacement one-sentence summary
+- `changes` (array, optional) — replacement list of `{ type, title, body? }`
+
+**Change types:** `feature`, `fix`, `breaking`, `improvement`, `internal`.
+
 ### `delete_release`
 
 Removes a previously published release.

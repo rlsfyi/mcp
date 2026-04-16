@@ -45,6 +45,17 @@ interface DeleteResponse {
   deleted: boolean;
 }
 
+interface PatchRequest {
+  project: string;
+  version: string;
+  summary?: string;
+  changes?: Change[];
+}
+
+interface PatchResponse {
+  url: string;
+}
+
 async function publishRelease(
   apiKey: string,
   request: PublishRequest
@@ -90,6 +101,36 @@ async function deleteRelease(
   }
 
   return data as DeleteResponse;
+}
+
+async function patchRelease(
+  apiKey: string,
+  request: PatchRequest
+): Promise<PatchResponse> {
+  const body: { summary?: string; changes?: Change[] } = {};
+  if (request.summary !== undefined) body.summary = request.summary;
+  if (request.changes !== undefined) body.changes = request.changes;
+
+  const response = await fetch(
+    `${RELEASES_URL}/${request.project}/${request.version}`,
+    {
+      method: "PATCH",
+      headers: {
+        "Content-Type": "application/json",
+        Authorization: `Bearer ${apiKey}`,
+      },
+      body: JSON.stringify(body),
+    }
+  );
+
+  const data = await response.json();
+
+  if (!response.ok) {
+    const error = data as ErrorResponse;
+    throw new Error(error.error || `HTTP ${response.status}`);
+  }
+
+  return data as PatchResponse;
 }
 
 const server = new Server(
@@ -172,6 +213,55 @@ server.setRequestHandler(ListToolsRequestSchema, async () => {
         },
       },
       {
+        name: "patch_release",
+        description:
+          "Update an already-published release on rls.fyi. Use this to fix or revise the summary and/or changes of a release after it was published. Provide at least one of summary or changes.",
+        inputSchema: {
+          type: "object" as const,
+          properties: {
+            project: {
+              type: "string",
+              description: "Project slug",
+            },
+            version: {
+              type: "string",
+              description: "Version of the release to update",
+            },
+            summary: {
+              type: "string",
+              description:
+                "Optional replacement summary. One clear sentence describing what changes for the user.",
+            },
+            changes: {
+              type: "array",
+              description:
+                "Optional replacement list of changes. Replaces the existing changes array when provided.",
+              items: {
+                type: "object",
+                properties: {
+                  type: {
+                    type: "string",
+                    description:
+                      "Change type: feature, fix, breaking, improvement, or internal",
+                  },
+                  title: {
+                    type: "string",
+                    description: "Concise title for this change",
+                  },
+                  body: {
+                    type: "string",
+                    description:
+                      "Optional additional context if the change needs explanation",
+                  },
+                },
+                required: ["type", "title"],
+              },
+            },
+          },
+          required: ["project", "version"],
+        },
+      },
+      {
         name: "delete_release",
         description:
           "Delete a release from rls.fyi. Use this to remove a release that was published by mistake or is no longer needed.",
@@ -197,7 +287,11 @@ server.setRequestHandler(ListToolsRequestSchema, async () => {
 server.setRequestHandler(CallToolRequestSchema, async (request) => {
   const toolName = request.params.name;
 
-  if (toolName !== "publish_release" && toolName !== "delete_release") {
+  if (
+    toolName !== "publish_release" &&
+    toolName !== "delete_release" &&
+    toolName !== "patch_release"
+  ) {
     throw new Error(`Unknown tool: ${toolName}`);
   }
 
@@ -234,6 +328,38 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
           {
             type: "text" as const,
             text: `Failed to publish release: ${message}`,
+          },
+        ],
+        isError: true,
+      };
+    }
+  }
+
+  if (toolName === "patch_release") {
+    const args = request.params.arguments as unknown as PatchRequest;
+
+    try {
+      if (args.summary === undefined && args.changes === undefined) {
+        throw new Error(
+          "At least one of 'summary' or 'changes' must be provided."
+        );
+      }
+      const result = await patchRelease(apiKey, args);
+      return {
+        content: [
+          {
+            type: "text" as const,
+            text: `Release updated successfully!\n\nRelease URL: ${result.url}`,
+          },
+        ],
+      };
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error);
+      return {
+        content: [
+          {
+            type: "text" as const,
+            text: `Failed to patch release: ${message}`,
           },
         ],
         isError: true,
