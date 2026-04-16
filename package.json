@@ -1,0 +1,35 @@
+{
+  "name": "@rlsfyi/mcp",
+  "version": "0.1.0",
+  "description": "MCP server for publishing releases to rls.fyi",
+  "type": "module",
+  "main": "dist/index.js",
+  "bin": {
+    "rlsfyi-mcp": "dist/index.js"
+  },
+  "files": [
+    "dist"
+  ],
+  "scripts": {
+    "build": "tsc",
+    "typecheck": "tsc --noEmit",
+    "dev": "tsc --watch",
+    "prepublishOnly": "bun run build"
+  },
+  "keywords": [
+    "mcp",
+    "release-notes",
+    "changelog",
+    "llm",
+    "ai"
+  ],
+  "author": "",
+  "license": "MIT",
+  "dependencies": {
+    "@modelcontextprotocol/sdk": "^1.0.0"
+  },
+  "devDependencies": {
+    "@types/node": "^22.0.0",
+    "typescript": "^5.7.0"
+  }
+}
