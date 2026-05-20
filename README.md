@@ -64,6 +64,12 @@ The JSON snippet is identical for Claude Code, Claude Desktop, Cursor, and Winds
 
 Other MCP-capable hosts should accept one of these two shapes; consult the host's own MCP docs for the destination path.
 
+### API key scopes
+
+When you create a key on the [dashboard](https://rls.fyi/dashboard), you can scope it to a specific project (or set of projects). Scoped keys can only publish, patch, or delete releases for projects they are allowed to touch; attempts against other projects return HTTP 403 with `{ "scope": "project" }`. Existing unscoped keys keep working unchanged.
+
+For per-project `.mcp.json` configs, prefer a key scoped to that project so a leaked key cannot affect anything else on the account.
+
 ### Project rules
 
 To teach the agent when to call `publish_release`, add a short instruction snippet to your project's rules file. The [rls.fyi dashboard](https://rls.fyi/dashboard) generates the snippet for you.
